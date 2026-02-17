@@ -272,16 +272,16 @@ kz[                           (* -- vertical focusing strength (1/m) *)
 ClearAll[dkd] ;
 Options[dkd] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
 dkd::usage = "dkd[object, energy, delta, periods, harmonics, shift, step, count, factors, options][{qx, px, qz, pz}] -- drift-kick-drift canonical tracking (period in mm, x and z in m)" ;
-dkd[                          (* -- rdrift-kick-drift canonical tracking *)
-	object_,                  (* -- radia object *)
-	energy_,                  (* -- reference energy (GeV) *)
-	delta_,                   (* -- energy delta *)
-	periods_,                 (* -- horizontal and vertival periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
-	harmonics_,               (* -- list of harmonics *)
-	shift_,                   (* -- longitudinal shift/position (mm) *)
-	step_,                    (* -- finite difference delta (mm) *)
-	count_,                   (* -- total number of (super) periods *)
-	factors_:{1.0, 1.0},      (* -- extra kick multiplicaton factors *)
+dkd[                          (* -- drift-kick-drift canonical tracking *)
+    object_,                  (* -- radia object *)
+    energy_,                  (* -- reference energy (GeV) *)
+    delta_,                   (* -- energy delta *)
+    periods_,                 (* -- horizontal and vertival periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
+    harmonics_,               (* -- list of harmonics *)
+    shift_,                   (* -- longitudinal shift/position (mm) *)
+    step_,                    (* -- finite difference delta (mm) *)
+    count_,                   (* -- total number of (super) periods *)
+    factors_:{1.0, 1.0},      (* -- extra kick multiplicaton factors *)
     options:OptionsPattern[]  (* -- options *)
 ][state_] := Block[
     {FX, FZ, QX, PX, QZ, PZ, X, XP, Z, ZP, DL},
@@ -309,18 +309,18 @@ dkd[                          (* -- rdrift-kick-drift canonical tracking *)
 (* --------- explicit ID transport matrix (appoximate) --------- *)
 
 ClearAll[idtm] ;
-idtm::usage = "idtm[{kx, kz}, {np, lp}, dp] -- compute id thin insertion exponent diagonal and corresponding transport matrix (second order in kx and kz)" ;
+idtm::usage = "idtm[{kx, ky}, np, lp, dp] -- compute id thin insertion exponent diagonal and corresponding transport matrix (second order in kx and kz)" ;
 idtm[                         (* -- id thin insertion diagonal and transport matrix *)
-	{kx_, kz_},               (* -- focusing strength (1/m) *)
-	count_,                   (* -- total number of (super) periods *)
-	period_,                  (* -- (super) period length (m) *)
-	delta_                    (* -- energy delta *)
+    {kx_, ky_},               (* -- focusing strength (1/m) *)
+    count_,                   (* -- total number of (super) periods *)
+    period_,                  (* -- (super) period length (m) *)
+    delta_                    (* -- energy delta *)
 ] := Block[
 	{a, b, c, d, diagonal, matrix},
 	a = (kx*count)/(1 + delta) - (kx^2*period*count*(-1 + count^2))/(6*(1 + delta)^3) ;
 	b = (kx*period^2*count*(-1 + count^2))/(12*(1 + delta)^3) + (kx^2*period^3*count*(-1 + count^4))/(120*(1 + delta)^5) ;
-	c = (kz*count)/(1 + delta) - (kz^2*period*count*(-1 + count^2))/(6*(1 + delta)^3); 
-	d = (kz*period^2*count*(-1 + count^2))/(12*(1 + delta)^3) + (kz^2*period^3*count*(-1 + count^4))/(120*(1 + delta)^5) ;
+	c = (ky*count)/(1 + delta) - (ky^2*period*count*(-1 + count^2))/(6*(1 + delta)^3); 
+	d = (ky*period^2*count*(-1 + count^2))/(12*(1 + delta)^3) + (ky^2*period^3*count*(-1 + count^4))/(120*(1 + delta)^5) ;
 	diagonal = {a, b, c, d} ;
 	matrix = MatrixExp[{{0, 1, 0, 0}, {-1, 0, 0, 0}, {0, 0, 0, 1}, {0, 0, -1, 0}} . DiagonalMatrix[diagonal]] ;
 	{diagonal, matrix}   
