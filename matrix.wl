@@ -550,8 +550,8 @@ km[                          (* -- drift-kick-drift tracking using kick map *)
 ][state_] := Block[
     {table, kx, kz, length, DL, FX, FZ, SX, SZ, QX, PX, QZ, PZ, X, XP, Z, ZP, energy, scale},
     table = interpolate[map, Sequence @@ FilterRules[{options}, Options[interpolate]]] ;
-    kx = table["XKick"];
-    kz = table["YKick"];
+    kx = table["XKick"] ;
+    kz = table["YKick"] ;
     length = OptionValue["Period"] ;
     length = If[length === Automatic, table["Length"], length] ;
     DL = length/2.0;
