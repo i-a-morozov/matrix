@@ -171,21 +171,31 @@ amplitude[                    (* -- amplitude *)
 (* --------- Elleaume potential (periodic field) --------- *)
 
 ClearAll[potential] ;
-Options[potential] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
-potential::usage = "potential[object, {x, z}, periods, harmonics, shift, options] -- compute Elleaume one-(super)period potenial " ;
-potential[                    (* -- potential (T^2 mm^3 *)
+Options[potential] = Join[{"SamplesPerHarmonic" -> 32, "Samples" -> Automatic, NIntegrate -> False}, Options[NIntegrate]] ;
+potential::usage = "potential[object, {x, z}, periods, harmonics, shift, options] -- compute Elleaume one-(super)period potential. By default sampled Fourier amplitudes are used; use NIntegrate -> True to compute the full period integral directly from shift - period/2 to shift + period/2 without harmonic expansion." ;
+potential[                    (* -- potential (T^2 mm^3) *)
     object_,                  (* -- radia object *)
     {x_, z_},                 (* -- transverse evaluation point (mm) *)
-    periods_,                 (* -- horizontal and vertival periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
+    periods_,                 (* -- horizontal and vertical periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
     harmonics_,               (* -- list of harmonics *)
     shift_,                   (* -- longitudinal shift/position (mm) *)
     options:OptionsPattern[]  (* -- options *)
-] := Block[{period, length, hx, hz, bx, bz},
+] := Block[{period, hx, hz, start, stop, integrate, field, primitive, value, bx, bz},
   period = Max[periods] ;
   {hx, hz} = Round[period/periods] ;
-  bx = Table[amplitude[object, "bx", period, {x, shift, z}, hx*harmonic, Sequence @@ FilterRules[{options}, Options[amplitude]]], {harmonic, harmonics}] ;
-  bz = Table[amplitude[object, "bz", period, {x, shift, z}, hz*harmonic, Sequence @@ FilterRules[{options}, Options[amplitude]]], {harmonic, harmonics}] ;
-  0.5*period*(period/(2*Pi))^2*Total[(bx^2/hx^2 + bz^2/hz^2)/harmonics^2]
+  If[
+    OptionValue[NIntegrate],
+    start = shift - period/2 ;
+    stop = shift + period/2 ;
+    integrate[integrand_, range_] := Apply[NIntegrate, Join[{integrand, range}, FilterRules[{options}, Options[NIntegrate]]]] ;
+    field[component_, y_?NumericQ] := field[component, y] = radFld[object, component, {x, y, z}] ;
+    primitive[component_, y_?NumericQ] := primitive[component, y] = integrate[field[component, s], {s, start, y}] ;
+    value[component_] := value[component] = integrate[primitive[component, y], {y, start, stop}]/period ;
+    integrate[(primitive["bx", y] - value["bx"])^2 + (primitive["bz", y] - value["bz"])^2, {y, start, stop}],
+    bx = Table[amplitude[object, "bx", period, {x, shift, z}, hx*harmonic, Sequence @@ FilterRules[{options}, Options[amplitude]]], {harmonic, harmonics}] ;
+    bz = Table[amplitude[object, "bz", period, {x, shift, z}, hz*harmonic, Sequence @@ FilterRules[{options}, Options[amplitude]]], {harmonic, harmonics}] ;
+    0.5*period*(period/(2*Pi))^2*Total[(bx^2/hx^2 + bz^2/hz^2)/harmonics^2]
+  ]
 ] ;
 
 (* --------- horizontal slope kick (period) --------- *)
@@ -196,7 +206,7 @@ dxp::usage = "dxp[object, {x, z}, periods, harmonics, shift, energy, delta, opti
 dxp[                          (* -- one-(super) period horizontal angle kick (murad) *)
     object_,                  (* -- radia object *)
     {x_, z_},                 (* -- transverse evaluation point (mm) *)
-    periods_,                 (* -- horizontal and vertival periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
+    periods_,                 (* -- horizontal and vertical periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
     harmonics_,               (* -- list of harmonics *)
     shift_,                   (* -- longitudinal shift/position (mm) *)
     energy_,                  (* -- reference energy (GeV) *)
@@ -216,7 +226,7 @@ dzp::usage = "dzp[object, {x, z}, periods, harmonics, shift, energy, delta, opti
 dzp[                          (* -- one-(super) period vertical angle kick (murad) *)
     object_,                  (* -- radia object *)
     {x_, z_},                 (* -- transverse evaluation point (mm) *)
-    periods_,                 (* -- horizontal and vertival periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
+    periods_,                 (* -- horizontal and vertical periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
     harmonics_,               (* -- list of harmonics *)
     shift_,                   (* -- longitudinal shift/position (mm) *)
     energy_,                  (* -- reference energy (GeV) *)
@@ -236,7 +246,7 @@ kx::usage = "kx[object, {x, z}, periods, harmonics, shift, energy, delta, option
 kx[                           (* -- horizontal focusing strength (1/m) *)
     object_,                  (* -- radia object *)
     {x_, z_},                 (* -- transverse evaluation point (mm) *)
-    periods_,                 (* -- horizontal and vertival periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
+    periods_,                 (* -- horizontal and vertical periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
     harmonics_,               (* -- list of harmonics *)
     shift_,                   (* -- longitudinal shift/position (mm) *)
     energy_,                  (* -- reference energy (GeV) *)
@@ -253,11 +263,11 @@ kx[                           (* -- horizontal focusing strength (1/m) *)
 
 ClearAll[kz] ;
 Options[kz] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
-kz::usage = "kx[object, {x, z}, periods, harmonics, shift, energy, delta, options] -- compute vertical focusing strength using central finite difference" ;
+kz::usage = "kz[object, {x, z}, periods, harmonics, shift, energy, delta, options] -- compute vertical focusing strength using central finite difference" ;
 kz[                           (* -- vertical focusing strength (1/m) *)
     object_,                  (* -- radia object *)
     {x_, z_},                 (* -- transverse evaluation point (mm) *)
-    periods_,                 (* -- horizontal and vertival periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
+    periods_,                 (* -- horizontal and vertical periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
     harmonics_,               (* -- list of harmonics *)
     shift_,                   (* -- longitudinal shift/position (mm) *)
     energy_,                  (* -- reference energy (GeV) *)
@@ -279,12 +289,12 @@ dkd[                          (* -- drift-kick-drift canonical tracking *)
 	object_,                  (* -- radia object *)
 	energy_,                  (* -- reference energy (GeV) *)
 	delta_,                   (* -- energy delta *)
-	periods_,                 (* -- horizontal and vertival periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
+	periods_,                 (* -- horizontal and vertical periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
 	harmonics_,               (* -- list of harmonics *)
 	shift_,                   (* -- longitudinal shift/position (mm) *)
 	step_,                    (* -- finite difference delta (mm) *)
 	count_,                   (* -- total number of (super) periods *)
-	factors_:{1.0, 1.0},      (* -- extra kick multiplicaton factors *)
+	factors_:{1.0, 1.0},      (* -- extra kick multiplication factors *)
     options:OptionsPattern[]  (* -- options *)
 ][state_] := Block[
     {FX, FZ, QX, PX, QZ, PZ, X, XP, Z, ZP, DL},
@@ -309,7 +319,7 @@ dkd[                          (* -- drift-kick-drift canonical tracking *)
 	{QX, PX, QZ, PZ}
 ] ;
 
-(* --------- explicit ID transport matrix (appoximate) --------- *)
+(* --------- explicit ID transport matrix (approximate) --------- *)
 
 ClearAll[idtm] ;
 idtm::usage = "idtm[{kx, kz}, {np, lp}, dp] -- compute id thin insertion exponent diagonal and corresponding transport matrix (second order in kx and kz)" ;
@@ -394,7 +404,7 @@ parameterize[
 	options:OptionsPattern[]  (* -- options *)
 ] := Block[
 	{transport, symplectic, positive, negative, derivative, identity, A, B},
-	transport = matrix[object, energy, 0.0, {start, stop}, steps, epsilon, solver, options] ;
+	transport = matrix[object, energy, 0.0, {start, stop}, steps, angles, epsilon, solver, options] ;
 	symplectic = symplectify[transport] ;
 	positive = matrix[object, energy, +delta, {start, stop}, steps, angles, epsilon, solver, options] ;
 	negative = matrix[object, energy, -delta, {start, stop}, steps, angles, epsilon, solver, options] ;
@@ -409,6 +419,7 @@ parameterize[
 
 ClearAll[ndxp];
 Options[ndxp] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
+ndxp::usage = "ndxp[object, {x, z}, periods, harmonics, shift, delta, options] -- compute the normalized one-(super)period horizontal slope kick from the Elleaume potential using a central finite difference. The transverse point {x, z}, periods, shift, and finite-difference delta are in millimeters; the returned value is not energy scaled." ;
 ndxp[object_, {x_, z_}, periods_, harmonics_, shift_, delta_, options:OptionsPattern[]] := Module[{pa, pb},
     pa = potential[object, {x - delta/2, z}, periods, harmonics, shift, Sequence @@ FilterRules[{options}, Options[potential]]] ;
     pb = potential[object, {x + delta/2, z}, periods, harmonics, shift, Sequence @@ FilterRules[{options}, Options[potential]]] ;
@@ -417,6 +428,7 @@ ndxp[object_, {x_, z_}, periods_, harmonics_, shift_, delta_, options:OptionsPat
 
 ClearAll[ndzp];
 Options[ndzp] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
+ndzp::usage = "ndzp[object, {x, z}, periods, harmonics, shift, delta, options] -- compute the normalized one-(super)period vertical slope kick from the Elleaume potential using a central finite difference. The transverse point {x, z}, periods, shift, and finite-difference delta are in millimeters; the returned value is not energy scaled." ;
 ndzp[object_, {x_, z_}, periods_, harmonics_, shift_, delta_, options : OptionsPattern[]] := Module[{pa, pb},
     pa = potential[object, {x, z - delta/2}, periods, harmonics, shift, Sequence @@ FilterRules[{options}, Options[potential]]] ;
     pb = potential[object, {x, z + delta/2}, periods, harmonics, shift, Sequence @@ FilterRules[{options}, Options[potential]]] ;
@@ -424,6 +436,7 @@ ndzp[object_, {x_, z_}, periods_, harmonics_, shift_, delta_, options : OptionsP
 ] ;
 
 ClearAll[round] ;
+round::usage = "round[x, digits] -- round x to the requested number of decimal digits. Use digits -> None to return N[x] without decimal rounding." ;
 round[x_, digits_Integer?NonNegative] := N[Round[x*10^digits]/10^digits] ;
 round[x_, None] := N[x] ;
 
@@ -436,17 +449,18 @@ Options[table] = {
 	"Delta" -> 0.1,                 (* -- finite-difference step (mm) *)
 	"Digits" -> None,               (* -- number of digits to keep *)
 	"File" -> "table",              (* -- output file name *)
-	"Point" -> {0.0, 0.0},          (* -- reference point transverse positon (mm) *)
+	"Point" -> {0.0, 0.0},          (* -- reference point transverse position (mm) *)
 	"Energy" -> None,               (* -- None or energy value (GeV) *)
 	"KickScales" -> 10.0^-6,        (* -- kick scale factors *)
 	"KickSigns" -> {-1, -1},        (* -- kick signs (use {-1, -1} for AT and {1, 1} in WM) *)
 	"Period" -> Automatic,          (* -- period length (mm) *)
-	"SamplesPerHarmonic" -> 32,      (* -- number of samples per harmonic *)
-	"Samples" -> Automatic           (* -- number of samples overwrite *)
+	"SamplesPerHarmonic" -> 32,     (* -- number of samples per harmonic *)
+	"Samples" -> Automatic          (* -- number of samples override *)
 } ;
+table::usage = "table[object, periods, harmonics, shift, options] -- generate a one-(super)period kick-map table on the configured transverse grid, export it as a MATLAB .mat file, and return the labeled data. XRange, ZRange, XStep, ZStep, Delta, Point, and Period are in millimeters; exported xtable, ytable, and Len are in meters. If Energy is None, kicks are normalized; otherwise kicks are scaled by (0.299792458/Energy)^2 and KickScales." ;
 table[                        (* -- generate and export AT kick map table *)
     object_,                  (* -- radia object *)
-	periods_,                 (* -- horizontal and vertival periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
+	periods_,                 (* -- horizontal and vertical periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
 	harmonics_,               (* -- list of harmonics *)
 	shift_,                   (* -- longitudinal shift/position (mm) *)
 	options: OptionsPattern[] (* -- option(s) *) 
@@ -493,6 +507,7 @@ table[                        (* -- generate and export AT kick map table *)
 
 ClearAll[interpolate];
 Options[interpolate] = {"InterpolationOrder" -> 3} ;
+interpolate::usage = "interpolate[map, options] -- convert a labeled kick-map table to an association containing ListInterpolation functions for horizontal and vertical kicks, sorted transverse ranges, and map length. The input map is the labeled data returned by table or imported from the exported .mat file." ;
 interpolate[map_, options : OptionsPattern[]] := Block[
 	{table, xGrid, zGrid, xKick, zKick, xOrder, zOrder, order},
 	table = Association[map] ;
@@ -516,7 +531,7 @@ interpolate[map_, options : OptionsPattern[]] := Block[
 	]
 ] ;
 
-(* --------- kick map dkd  based tracking --------- *)
+(* --------- kick map dkd based tracking --------- *)
 
 ClearAll[km] ;
 Options[km] = {
@@ -527,6 +542,7 @@ Options[km] = {
 	"Delta" -> True,                (* -- use energy deviation *)
 	"InterpolationOrder" -> 3       (* -- interpolation order *)
 } ;
+km::usage = "km[map, delta, count, factors, options][{qx, px, qz, pz}] -- track canonical coordinates through count drift-kick-drift periods using a kick-map table. Coordinates qx and qz are in meters; px and pz are canonical momenta. Period is in meters, or Automatic to use Len from the map. If Energy is None, the map is assumed already scaled; otherwise kicks are scaled by (0.299792458/(Energy*(1 + delta)))^2." ;
 km[                          (* -- drift-kick-drift tracking using kick map *)
     map_,                    (* -- kick map table *)
     delta_,                  (* -- energy delta *)
