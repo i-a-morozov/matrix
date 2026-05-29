@@ -1,3 +1,6 @@
+(* Transport matrix computation *)
+(* I.M., 2025-2026 *)
+
 (* --------- RadFldPtcTrj --------- *)
 
 ClearAll[RadFldPtcTrj] ;
@@ -273,15 +276,15 @@ ClearAll[dkd] ;
 Options[dkd] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
 dkd::usage = "dkd[object, energy, delta, periods, harmonics, shift, step, count, factors, options][{qx, px, qz, pz}] -- drift-kick-drift canonical tracking (period in mm, x and z in m)" ;
 dkd[                          (* -- drift-kick-drift canonical tracking *)
-    object_,                  (* -- radia object *)
-    energy_,                  (* -- reference energy (GeV) *)
-    delta_,                   (* -- energy delta *)
-    periods_,                 (* -- horizontal and vertival periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
-    harmonics_,               (* -- list of harmonics *)
-    shift_,                   (* -- longitudinal shift/position (mm) *)
-    step_,                    (* -- finite difference delta (mm) *)
-    count_,                   (* -- total number of (super) periods *)
-    factors_:{1.0, 1.0},      (* -- extra kick multiplicaton factors *)
+	object_,                  (* -- radia object *)
+	energy_,                  (* -- reference energy (GeV) *)
+	delta_,                   (* -- energy delta *)
+	periods_,                 (* -- horizontal and vertival periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
+	harmonics_,               (* -- list of harmonics *)
+	shift_,                   (* -- longitudinal shift/position (mm) *)
+	step_,                    (* -- finite difference delta (mm) *)
+	count_,                   (* -- total number of (super) periods *)
+	factors_:{1.0, 1.0},      (* -- extra kick multiplicaton factors *)
     options:OptionsPattern[]  (* -- options *)
 ][state_] := Block[
     {FX, FZ, QX, PX, QZ, PZ, X, XP, Z, ZP, DL},
@@ -309,18 +312,18 @@ dkd[                          (* -- drift-kick-drift canonical tracking *)
 (* --------- explicit ID transport matrix (appoximate) --------- *)
 
 ClearAll[idtm] ;
-idtm::usage = "idtm[{kx, ky}, np, lp, dp] -- compute id thin insertion exponent diagonal and corresponding transport matrix (second order in kx and kz)" ;
+idtm::usage = "idtm[{kx, kz}, {np, lp}, dp] -- compute id thin insertion exponent diagonal and corresponding transport matrix (second order in kx and kz)" ;
 idtm[                         (* -- id thin insertion diagonal and transport matrix *)
-    {kx_, ky_},               (* -- focusing strength (1/m) *)
-    count_,                   (* -- total number of (super) periods *)
-    period_,                  (* -- (super) period length (m) *)
-    delta_                    (* -- energy delta *)
+	{kx_, kz_},               (* -- focusing strength (1/m) *)
+	count_,                   (* -- total number of (super) periods *)
+	period_,                  (* -- (super) period length (m) *)
+	delta_                    (* -- energy delta *)
 ] := Block[
 	{a, b, c, d, diagonal, matrix},
 	a = (kx*count)/(1 + delta) - (kx^2*period*count*(-1 + count^2))/(6*(1 + delta)^3) ;
 	b = (kx*period^2*count*(-1 + count^2))/(12*(1 + delta)^3) + (kx^2*period^3*count*(-1 + count^4))/(120*(1 + delta)^5) ;
-	c = (ky*count)/(1 + delta) - (ky^2*period*count*(-1 + count^2))/(6*(1 + delta)^3); 
-	d = (ky*period^2*count*(-1 + count^2))/(12*(1 + delta)^3) + (ky^2*period^3*count*(-1 + count^4))/(120*(1 + delta)^5) ;
+	c = (kz*count)/(1 + delta) - (kz^2*period*count*(-1 + count^2))/(6*(1 + delta)^3); 
+	d = (kz*period^2*count*(-1 + count^2))/(12*(1 + delta)^3) + (kz^2*period^3*count*(-1 + count^4))/(120*(1 + delta)^5) ;
 	diagonal = {a, b, c, d} ;
 	matrix = MatrixExp[{{0, 1, 0, 0}, {-1, 0, 0, 0}, {0, 0, 0, 1}, {0, 0, -1, 0}} . DiagonalMatrix[diagonal]] ;
 	{diagonal, matrix}   
@@ -400,4 +403,158 @@ parameterize[
 	A = Re[- identity . MatrixLog[symplectic]] ;
 	B = - identity . MatrixExp[- identity . A] . derivative ;
 	{transport, symplectic, A, B, 1/2 (B + Transpose[B])}
+] ;
+
+(* --------- kick map table generation & export (one period) --------- *)
+
+ClearAll[ndxp];
+Options[ndxp] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
+ndxp[object_, {x_, z_}, periods_, harmonics_, shift_, delta_, options:OptionsPattern[]] := Module[{pa, pb},
+    pa = potential[object, {x - delta/2, z}, periods, harmonics, shift, Sequence @@ FilterRules[{options}, Options[potential]]] ;
+    pb = potential[object, {x + delta/2, z}, periods, harmonics, shift, Sequence @@ FilterRules[{options}, Options[potential]]] ;
+    (pb - pa)/delta*0.5
+] ;
+
+ClearAll[ndzp];
+Options[ndzp] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
+ndzp[object_, {x_, z_}, periods_, harmonics_, shift_, delta_, options : OptionsPattern[]] := Module[{pa, pb},
+    pa = potential[object, {x, z - delta/2}, periods, harmonics, shift, Sequence @@ FilterRules[{options}, Options[potential]]] ;
+    pb = potential[object, {x, z + delta/2}, periods, harmonics, shift, Sequence @@ FilterRules[{options}, Options[potential]]] ;
+    (pb - pa)/delta*0.5
+] ;
+
+ClearAll[round] ;
+round[x_, digits_Integer?NonNegative] := N[Round[x*10^digits]/10^digits] ;
+round[x_, None] := N[x] ;
+
+ClearAll[table] ;
+Options[table] = {
+	"XRange" -> {-20.0, 20.0},      (* -- (mm) *)
+	"ZRange" -> {-20.0, 20.0},      (* -- (mm) *)
+	"XStep" -> 0.5,                 (* -- (mm) *)
+	"ZStep" -> 0.5,                 (* -- (mm) *)
+	"Delta" -> 0.1,                 (* -- finite-difference step (mm) *)
+	"Digits" -> None,               (* -- number of digits to keep *)
+	"File" -> "table",              (* -- output file name *)
+	"Point" -> {0.0, 0.0},          (* -- reference point transverse positon (mm) *)
+	"Energy" -> None,               (* -- None or energy value (GeV) *)
+	"KickScales" -> 10.0^-6,        (* -- kick scale factors *)
+	"KickSigns" -> {-1, -1},        (* -- kick signs (use {-1, -1} for AT and {1, 1} in WM) *)
+	"Period" -> Automatic,          (* -- period length (mm) *)
+	"SamplesPerHarmonic" -> 32,      (* -- number of samples per harmonic *)
+	"Samples" -> Automatic           (* -- number of samples overwrite *)
+} ;
+table[                        (* -- generate and export AT kick map table *)
+    object_,                  (* -- radia object *)
+	periods_,                 (* -- horizontal and vertival periods (mm), {ph, pv} = {n*p, p} or {p, n*p} and n*p -- super-period *)
+	harmonics_,               (* -- list of harmonics *)
+	shift_,                   (* -- longitudinal shift/position (mm) *)
+	options: OptionsPattern[] (* -- option(s) *) 
+] := Block[
+	{xmin, xmax, dx, nptx, xGrid, xtable, zmin, zmax, dz, nptz, zGrid, ztable, delta, digits, point, energy, factor, scale, sx, sz, length, xp, zp, result, file},
+	{xmin, xmax} = OptionValue["XRange"] ;
+	{zmin, zmax} = OptionValue["ZRange"] ;
+	dx = OptionValue["XStep"] ;
+	dz = OptionValue["ZStep"] ;
+	nptx = Round[(xmax - xmin)/dx] + 1 ;
+	nptz = Round[(zmax - zmin)/dz] + 1 ;
+	xGrid = N[Subdivide[xmin, xmax, nptx - 1]] ;
+	zGrid = N[Subdivide[zmax, zmin, nptz - 1]] ;
+	xtable = xGrid/1000.0 ;
+	ztable = zGrid/1000.0 ;
+	delta = OptionValue["Delta"] ;
+	digits = OptionValue["Digits"] ;
+	point = OptionValue["Point"] ;
+	energy = OptionValue["Energy"] ;
+	factor = If[energy === None, 1.0, (0.299792458/energy)^2] ;
+	scale = factor*OptionValue["KickScales"];
+	{sx, sz} = OptionValue["KickSigns"];
+	length = OptionValue["Period"] ;
+	length = If[length === Automatic, Max[periods], length] ;
+	xp = Table[ndxp[object, point + {x, z}, periods, harmonics, shift, delta, Sequence @@ FilterRules[{options}, Options[ndxp]]], {z, zGrid}, {x, xGrid}] ;
+	zp = Table[ndzp[object, point + {x, z}, periods, harmonics, shift, delta, Sequence @@ FilterRules[{options}, Options[ndzp]]], {z, zGrid}, {x, xGrid}] ;
+	xp = Transpose[round[sx*scale*xp, digits]] ;
+	zp = Transpose[round[sz*scale*zp, digits]] ;
+	result = {
+		"xkick" -> 0*xp,
+		"ykick" -> 0*zp,
+		"xkick1" -> xp,
+		"ykick1" -> zp,
+		"xtable" -> {xtable},
+		"ytable" -> {ztable},
+		"Len" -> {{N[length/1000.0]}}
+	} ;
+	file = OptionValue["File"] <> ".mat" ;
+	Export[file, result, "LabeledData"] ;
+	result
+] ;
+
+(* --------- kick map table tracking --------- *)
+
+ClearAll[interpolate];
+Options[interpolate] = {"InterpolationOrder" -> 3} ;
+interpolate[map_, options : OptionsPattern[]] := Block[
+	{table, xGrid, zGrid, xKick, zKick, xOrder, zOrder, order},
+	table = Association[map] ;
+	xGrid = N[Flatten[table["xtable"]]] ;
+	zGrid = N[Flatten[table["ytable"]]] ;
+	xKick = N[table["xkick1"]] ;
+	zKick = N[table["ykick1"]] ;
+	xOrder = Ordering[xGrid] ;
+	zOrder = Ordering[zGrid] ;
+	xGrid = xGrid[[xOrder]] ;
+	zGrid = zGrid[[zOrder]] ;
+	xKick = xKick[[xOrder, zOrder]] ;
+	zKick = zKick[[xOrder, zOrder]] ;
+	order = OptionValue["InterpolationOrder"] ;
+	Association[
+		"XKick" -> ListInterpolation[xKick, {xGrid, zGrid}, InterpolationOrder -> order],
+		"YKick" -> ListInterpolation[zKick, {xGrid, zGrid}, InterpolationOrder -> order],
+		"XRange" -> MinMax[xGrid],
+		"ZRange" -> MinMax[zGrid],
+		"Length" -> First[Flatten[table["Len"]]]
+	]
+] ;
+
+(* --------- kick map dkd  based tracking --------- *)
+
+ClearAll[km] ;
+Options[km] = {
+	"Period" -> Automatic,          (* -- period length (m) *)
+	"Energy" -> None,               (* -- None if map is already energy scaled or energy in GeV *)
+	"KickScales" -> 1.0,            (* -- extra kick scale *)
+	"KickSigns" -> {-1, -1},        (* -- optional sign flip during tracking *)
+	"Delta" -> True,                (* -- use energy deviation *)
+	"InterpolationOrder" -> 3       (* -- interpolation order *)
+} ;
+km[                          (* -- drift-kick-drift tracking using kick map *)
+    map_,                    (* -- kick map table *)
+    delta_,                  (* -- energy delta *)
+    count_,                  (* -- total number of kicks/periods *)
+    factors_:  {1.0, 1.0},   (* -- extra kick multiplication factors *)
+    options:  OptionsPattern[]
+][state_] := Block[
+    {table, kx, kz, length, DL, FX, FZ, SX, SZ, QX, PX, QZ, PZ, X, XP, Z, ZP, energy, scale},
+    table = interpolate[map, Sequence @@ FilterRules[{options}, Options[interpolate]]] ;
+    kx = table["XKick"];
+    kz = table["YKick"];
+    length = OptionValue["Period"] ;
+    length = If[length === Automatic, table["Length"], length] ;
+    DL = length/2.0;
+    {FX, FZ} = factors ;
+    {SX, SZ} = OptionValue["KickSigns"] ;
+    energy = OptionValue["Energy"] ;
+    scale = OptionValue["KickScales"]*If[energy === None, If[OptionValue["Delta"], 1.0/(1.0 + delta)^2, 1.0], (0.299792458/(energy*(1.0 + delta)))^2] ;
+    {QX, PX, QZ, PZ} = state;
+    {QX, PX, QZ, PZ} = {QX - count*DL*PX/Sqrt[(1.0 + delta)^2 - PX^2 - PZ^2], PX, QZ - count*DL*PZ/Sqrt[(1.0 + delta)^2 - PX^2 - PZ^2], PZ} ;
+    Do[
+        {QX, PX, QZ, PZ} = {QX + DL*PX/Sqrt[(1.0 + delta)^2 - PX^2 - PZ^2], PX, QZ + DL*PZ/Sqrt[(1.0 + delta)^2 - PX^2 - PZ^2], PZ} ;
+        {X, XP, Z, ZP} = {QX, PX/Sqrt[(1.0 + delta)^2 - PX^2 - PZ^2], QZ, PZ/Sqrt[(1.0 + delta)^2 - PX^2 - PZ^2]} ;
+        {X, XP, Z, ZP} = {X, XP - FX*SX*scale*kx[X, Z], Z, ZP - FZ*SZ*scale*kz[X, Z]} ;
+        {QX, PX, QZ, PZ} = {X, (1.0 + delta)*XP/Sqrt[1.0 + XP^2 + ZP^2], Z, (1.0 + delta)*ZP/Sqrt[1.0 + XP^2 + ZP^2]} ;
+        {QX, PX, QZ, PZ} = {QX + DL*PX/Sqrt[(1.0 + delta)^2 - PX^2 - PZ^2], PX, QZ + DL*PZ/Sqrt[(1.0 + delta)^2 - PX^2 - PZ^2], PZ},
+        count
+    ] ;
+    {QX, PX, QZ, PZ} = {QX - count*DL*PX/Sqrt[(1.0 + delta)^2 - PX^2 - PZ^2], PX, QZ - count*DL*PZ/Sqrt[(1.0 + delta)^2 - PX^2 - PZ^2], PZ} ;
+    {QX, PX, QZ, PZ}
 ] ;
