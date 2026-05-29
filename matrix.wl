@@ -201,7 +201,7 @@ potential[                    (* -- potential (T^2 mm^3) *)
 (* --------- horizontal slope kick (period) --------- *)
 
 ClearAll[dxp] ;
-Options[dxp] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
+Options[potential] = Join[{"SamplesPerHarmonic" -> 32, "Samples" -> Automatic, NIntegrate -> False}, Options[NIntegrate]] ;
 dxp::usage = "dxp[object, {x, z}, periods, harmonics, shift, energy, delta, options] -- compute one-(super) period horizontal angle kick (murad) using central finite difference" ;
 dxp[                          (* -- one-(super) period horizontal angle kick (murad) *)
     object_,                  (* -- radia object *)
@@ -221,7 +221,7 @@ dxp[                          (* -- one-(super) period horizontal angle kick (mu
 (* --------- vertical slope kick (period) --------- *)
 
 ClearAll[dzp] ;
-Options[dzp] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
+Options[potential] = Join[{"SamplesPerHarmonic" -> 32, "Samples" -> Automatic, NIntegrate -> False}, Options[NIntegrate]] ;
 dzp::usage = "dzp[object, {x, z}, periods, harmonics, shift, energy, delta, options] -- compute one-(super) period vertical angle kick (murad) using central finite difference" ;
 dzp[                          (* -- one-(super) period vertical angle kick (murad) *)
     object_,                  (* -- radia object *)
@@ -241,7 +241,7 @@ dzp[                          (* -- one-(super) period vertical angle kick (mura
 (* --------- horizontal focusing strength (period) --------- *)
 
 ClearAll[kx] ;
-Options[kx] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
+Options[potential] = Join[{"SamplesPerHarmonic" -> 32, "Samples" -> Automatic, NIntegrate -> False}, Options[NIntegrate]] ;
 kx::usage = "kx[object, {x, z}, periods, harmonics, shift, energy, delta, options] -- compute horizontal focusing strength using central finite difference" ;
 kx[                           (* -- horizontal focusing strength (1/m) *)
     object_,                  (* -- radia object *)
@@ -262,7 +262,7 @@ kx[                           (* -- horizontal focusing strength (1/m) *)
 (* --------- vertical focusing strength (period) --------- *)
 
 ClearAll[kz] ;
-Options[kz] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
+Options[potential] = Join[{"SamplesPerHarmonic" -> 32, "Samples" -> Automatic, NIntegrate -> False}, Options[NIntegrate]] ;
 kz::usage = "kz[object, {x, z}, periods, harmonics, shift, energy, delta, options] -- compute vertical focusing strength using central finite difference" ;
 kz[                           (* -- vertical focusing strength (1/m) *)
     object_,                  (* -- radia object *)
@@ -283,7 +283,7 @@ kz[                           (* -- vertical focusing strength (1/m) *)
 (* --------- dkd potential based tracking --------- *)
 
 ClearAll[dkd] ;
-Options[dkd] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
+Options[potential] = Join[{"SamplesPerHarmonic" -> 32, "Samples" -> Automatic, NIntegrate -> False}, Options[NIntegrate]] ;
 dkd::usage = "dkd[object, energy, delta, periods, harmonics, shift, step, count, factors, options][{qx, px, qz, pz}] -- drift-kick-drift canonical tracking (period in mm, x and z in m)" ;
 dkd[                          (* -- drift-kick-drift canonical tracking *)
 	object_,                  (* -- radia object *)
@@ -418,7 +418,7 @@ parameterize[
 (* --------- kick map table generation & export (one period) --------- *)
 
 ClearAll[ndxp];
-Options[ndxp] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
+Options[potential] = Join[{"SamplesPerHarmonic" -> 32, "Samples" -> Automatic, NIntegrate -> False}, Options[NIntegrate]] ;
 ndxp::usage = "ndxp[object, {x, z}, periods, harmonics, shift, delta, options] -- compute the normalized one-(super)period horizontal slope kick from the Elleaume potential using a central finite difference. The transverse point {x, z}, periods, shift, and finite-difference delta are in millimeters; the returned value is not energy scaled." ;
 ndxp[object_, {x_, z_}, periods_, harmonics_, shift_, delta_, options:OptionsPattern[]] := Module[{pa, pb},
     pa = potential[object, {x - delta/2, z}, periods, harmonics, shift, Sequence @@ FilterRules[{options}, Options[potential]]] ;
@@ -427,7 +427,7 @@ ndxp[object_, {x_, z_}, periods_, harmonics_, shift_, delta_, options:OptionsPat
 ] ;
 
 ClearAll[ndzp];
-Options[ndzp] = {"SamplesPerHarmonic" -> 32, "Samples" -> Automatic} ;
+Options[potential] = Join[{"SamplesPerHarmonic" -> 32, "Samples" -> Automatic, NIntegrate -> False}, Options[NIntegrate]] ;
 ndzp::usage = "ndzp[object, {x, z}, periods, harmonics, shift, delta, options] -- compute the normalized one-(super)period vertical slope kick from the Elleaume potential using a central finite difference. The transverse point {x, z}, periods, shift, and finite-difference delta are in millimeters; the returned value is not energy scaled." ;
 ndzp[object_, {x_, z_}, periods_, harmonics_, shift_, delta_, options : OptionsPattern[]] := Module[{pa, pb},
     pa = potential[object, {x, z - delta/2}, periods, harmonics, shift, Sequence @@ FilterRules[{options}, Options[potential]]] ;
@@ -441,7 +441,7 @@ round[x_, digits_Integer?NonNegative] := N[Round[x*10^digits]/10^digits] ;
 round[x_, None] := N[x] ;
 
 ClearAll[table] ;
-Options[table] = {
+Options[table] = Join[{
 	"XRange" -> {-20.0, 20.0},      (* -- (mm) *)
 	"ZRange" -> {-20.0, 20.0},      (* -- (mm) *)
 	"XStep" -> 0.5,                 (* -- (mm) *)
@@ -453,10 +453,8 @@ Options[table] = {
 	"Energy" -> None,               (* -- None or energy value (GeV) *)
 	"KickScales" -> 10.0^-6,        (* -- kick scale factors *)
 	"KickSigns" -> {-1, -1},        (* -- kick signs (use {-1, -1} for AT and {1, 1} in WM) *)
-	"Period" -> Automatic,          (* -- period length (mm) *)
-	"SamplesPerHarmonic" -> 32,     (* -- number of samples per harmonic *)
-	"Samples" -> Automatic          (* -- number of samples override *)
-} ;
+	"Period" -> Automatic           (* -- period length (mm) *)
+}, Options[potential]] ;
 table::usage = "table[object, periods, harmonics, shift, options] -- generate a one-(super)period kick-map table on the configured transverse grid, export it as a MATLAB .mat file, and return the labeled data. XRange, ZRange, XStep, ZStep, Delta, Point, and Period are in millimeters; exported xtable, ytable, and Len are in meters. If Energy is None, kicks are normalized; otherwise kicks are scaled by (0.299792458/Energy)^2 and KickScales." ;
 table[                        (* -- generate and export AT kick map table *)
     object_,                  (* -- radia object *)
